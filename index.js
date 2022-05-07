@@ -18,6 +18,10 @@ const SECRET = process.env.SECRET;
 
 const CALLBACK_URL = "/oauth/discord/callback";
 
+const jwt = require('jsonwebtoken')
+
+let scopes = ['identify', 'email', 'guilds'];
+
 mongoose.connect(process.env.MONGO_ID,{
 	useNewUrlParser: true,
 	useUnifiedTopology: true,
@@ -36,6 +40,8 @@ app.use(cors({
     credentials: true,
 }));
 
+app.use(passport.initialize());
+
 passport.serializeUser(function(user, done) {
     done(null, user);
 });
@@ -43,20 +49,32 @@ passport.deserializeUser(function(obj, done) {
     done(null, obj);
 });
 
-app.use(session({
-    secret: SECRET,
-    maxAge: 1000 * 60 * 60 *24, // 1 Day
-    saveUninitialized: false
-}))
+
 
 passport.use(new DiscordStrategy({
     clientID: CLIENT_ID,
     clientSecret: CLIENT_SECRET,
     callbackURL: CALLBACK_URL,
     scope: scopes
-}, function (accessToken, refreshToken, profile, done) {
+}, async function (accessToken, refreshToken, profile, done) {
     console.log(profile)
-    DashboardUserModel.find()
+    try{
+        const user = await DashboardUserModel.findOne({email: profile.email})
+        if(!user) {
+            const newUser = new DashboardUserModel({
+                email: profile.email,
+                username: profile.username,
+                id: profile.id,
+                accessToken: profile.accessToken,
+            });
+            await newUser.save();
+            return done(null, newUser)
+        } else {
+            return done(null, user)
+        }
+    } catch(err) {
+        return done(err, profile)
+    }
 }));
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -71,13 +89,35 @@ app.get('/tickets', async (req, res) => {
     res.json(tickets);
 });
 
-aapp.get('/oauth/discord',passport.authenticate('discord'));
+app.get('/oauth/discord',passport.authenticate('discord'));
 app.get('/oauth/discord/callback', passport.authenticate('discord', {
     failureRedirect: '/'
-}), function(req, res) {
-    console.log('Login success')
-    res.redirect('http://localhost:3000')
+}), function(req, res, next) {
+    const token = jwt.sign({id: req.user.id}, SECRET, {expiresIn: 60 * 60 * 24 * 1000})
+    req.logIn(req.user, function(err) {
+        if (err) return next(err); ;
+        res.redirect(`http://localhost:3000?token=${token}`)
+      });
 });
 app.get('oauth/discord/logout', (req, res) => {
 
 });
+
+
+app.use((req, res, next) => {
+    const token = req.headers['authorization'];
+
+    jwt.verify(token, SECRET, function(err, data){
+        if (err) {
+            res.status(401).send({ error: "NotAuthorized" })
+        } else {
+            req.user = data;
+            next();
+        }
+    })
+});
+
+app.get('/profile', async (req, res) => {
+    const user = await DashboardUserModel.findOne({id: req.id})
+    res.send(user);
+})

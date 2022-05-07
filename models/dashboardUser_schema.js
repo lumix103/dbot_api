@@ -1,21 +1,12 @@
 const mongoose = require('mongoose');
 
 const dashboardUserSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        require: true,
-    },
-    userID: {
-        type: String, 
-        require: true
-    },
-    serverID: {
-        type: Boolean, 
-        require: true,
-        default: false
-    },
+    username: String,
+    email: String,
+    id: String,
+    accessToken: String
 });
 
-const DashboardUserModel = mongoose.model('DashboardUser', ticketSchema,);
+const DashboardUserModel = mongoose.model('DashboardUser', dashboardUserSchema,);
 
 module.exports = DashboardUserModel; 
