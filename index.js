@@ -59,7 +59,7 @@ passport.use(new DiscordStrategy({
 }, async function (accessToken, refreshToken, profile, done) {
     console.log(profile)
     try{
-        const user = await DashboardUserModel.findOne({email: profile.email})
+        let user = await DashboardUserModel.findOne({email: profile.email})
         if(!user) {
             const newUser = new DashboardUserModel({
                 email: profile.email,
@@ -70,6 +70,13 @@ passport.use(new DiscordStrategy({
             await newUser.save();
             return done(null, newUser)
         } else {
+            user = new DashboardUserModel({
+                email: profile.email,
+                username: profile.username,
+                id: profile.id,
+                accessToken: profile.accessToken,
+            });
+            await user.save();
             return done(null, user)
         }
     } catch(err) {
@@ -99,25 +106,17 @@ app.get('/oauth/discord/callback', passport.authenticate('discord', {
         res.redirect(`http://localhost:3000?token=${token}`)
       });
 });
-app.get('oauth/discord/logout', (req, res) => {
 
-});
-
-
-app.use((req, res, next) => {
+app.get('/profile', async (req, res) => {
     const token = req.headers['authorization'];
 
     jwt.verify(token, SECRET, function(err, data){
         if (err) {
-            res.status(401).send({ error: "NotAuthorized" })
+            res.status(401).send({error: "NotAuthorized" })
         } else {
             req.user = data;
-            next();
         }
     })
-});
-
-app.get('/profile', async (req, res) => {
     const user = await DashboardUserModel.findOne({id: req.id})
     res.send(user);
 })
