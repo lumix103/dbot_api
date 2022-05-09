@@ -18,7 +18,8 @@ const SECRET = process.env.SECRET;
 
 const CALLBACK_URL = "/oauth/discord/callback";
 
-const jwt = require('jsonwebtoken')
+const jwt = require('jsonwebtoken');
+const CommandModel = require('./models/command_schema');
 
 let scopes = ['identify', 'email', 'guilds'];
 
@@ -70,13 +71,7 @@ passport.use(new DiscordStrategy({
             await newUser.save();
             return done(null, newUser)
         } else {
-            user = new DashboardUserModel({
-                email: profile.email,
-                username: profile.username,
-                id: profile.id,
-                accessToken: profile.accessToken,
-            });
-            await user.save();
+            await user.updateOne({accessToken: profile.accessToken});
             return done(null, user)
         }
     } catch(err) {
@@ -107,16 +102,31 @@ app.get('/oauth/discord/callback', passport.authenticate('discord', {
       });
 });
 
-app.get('/profile', async (req, res) => {
-    const token = req.headers['authorization'];
+app.post('/command', async (req, res) => {
+    const command = new CommandModel({
+        id: req.body.id,
+        name: req.body.name,
+        description: req.body.description,
+        response: req.body.response,
+    })
+    command.save();
+    res.sendStatus(200)
+})
 
+app.use((req,res,next)=> {
+    const token = req.headers['authorization'];
     jwt.verify(token, SECRET, function(err, data){
         if (err) {
             res.status(401).send({error: "NotAuthorized" })
         } else {
             req.user = data;
+            next();
         }
     })
-    const user = await DashboardUserModel.findOne({id: req.id})
-    res.send(user);
+})
+
+app.get('/profile', async (req, res) => {
+    const user = await DashboardUserModel.findOne({id: req.user.id})
+    console.log(user);
+    res.json(user);
 })
